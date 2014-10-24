@@ -1,0 +1,58 @@
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+
+<!-- CSS -->
+<link rel="stylesheet" href="styles.css">
+
+<!-- Javascript -->
+<script type="text/javascript">
+$(document).ready(function (){
+    $("#btn382").click(function(){
+        /* set no cache */
+        $.ajaxSetup({ cache: false });
+        $.getJSON("/HelloWorld/Personas.json", function(data){
+            var html = [];
+
+            /* loop through array */
+            $.each(data, function(index, d){
+                html.push("<b> Nombre : </b> ", d.Nombre, "<b> F.Nac : </b>" ,
+                            d.FNac , " <b> F.Def : </b> " , d.FDec ,"<br>");
+            });
+
+
+            $("#div381").html(html.join(''))
+        }).error(function(jqXHR, textStatus, errorThrown){ /* assign handler */
+            /* alert(jqXHR.responseText) */
+            alert("error occurred!");
+        });
+    });
+});
+</script>
+
+<!-- HTML -->
+<meta charset="utf-8">
+
+<body style="background: url(images/bgnoise_lg.png) repeat left top;">
+
+  <div id="container" style="width: 600px; margin: 10px auto 0;">
+
+	<!-- begin navigation -->
+	<nav id="navigation">
+		<ul>
+			<li><a id="btn382">Familia</a></li>
+			<li><a href="#">Nuevo</a></li>
+			<li><a href="#">Arbol</a></li>
+			<li><a href="#">Fotos</a></li>
+			<li><a href="#">Documentos</a></li>
+			<li><a href="/HelloWorld/Personas.json" target="_blank">Archivo</a></li>
+		</ul>
+	</nav>
+	<!-- end navigation -->
+
+</div>
+  <a name="#ajax-getjson-example"></a>
+  <div id="example-section38">
+
+    <div id="div381"></div>
+    &nbsp;
+  </div>
+</body>
