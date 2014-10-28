@@ -4,27 +4,12 @@
 <link rel="stylesheet" href="styles.css">
 
 <!-- Javascript -->
+<script type="text/javascript" src="/HelloWorld/main.js"></script>
 <script type="text/javascript">
 $(document).ready(function (){
-    $("#btn382").click(function(){
-        /* set no cache */
-        $.ajaxSetup({ cache: false });
-        $.getJSON("/HelloWorld/Personas.json", function(data){
-            var html = [];
-
-            /* loop through array */
-            $.each(data, function(index, d){
-                html.push("<b> Nombre : </b> ", d.Nombre, "<b> F.Nac : </b>" ,
-                            d.FNac , " <b> F.Def : </b> " , d.FDec ,"<br>");
-            });
-
-
-            $("#div381").html(html.join(''))
-        }).error(function(jqXHR, textStatus, errorThrown){ /* assign handler */
-            /* alert(jqXHR.responseText) */
-            alert("error occurred!");
-        });
-    });
+  $("#btn382").click(function(){
+    retornarPersonas();
+  });
 });
 </script>
 
@@ -39,10 +24,10 @@ $(document).ready(function (){
 	<nav id="navigation">
 		<ul>
 			<li><a id="btn382">Familia</a></li>
-			<li><a href="#">Nuevo</a></li>
+			<li><a id="btn383">Nuevo</a></li>
 			<li><a href="#">Arbol</a></li>
 			<li><a href="#">Fotos</a></li>
-			<li><a href="#">Documentos</a></li>
+			<li><a href="#">Buscar</a></li>
 			<li><a href="/HelloWorld/Personas.json" target="_blank">Archivo</a></li>
 		</ul>
 	</nav>
@@ -53,6 +38,6 @@ $(document).ready(function (){
   <div id="example-section38">
 
     <div id="div381"></div>
-    &nbsp;
+
   </div>
 </body>
