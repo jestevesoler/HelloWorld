@@ -95,5 +95,17 @@ ul {
 	border-radius: 0 100px 100px 0;
 }
 
+#persona {
+	font: 12px/18px "Helvetica Neue", Helvetica, Arial, sans-serif;
+	color: #444;
+	border-style: solid;
+	border-width: 1px;
+	border-color: #BABABA #BABABA #BABABA #BABABA;
+	box-shadow: 0 1px rgba(255,255,255,1) inset;
+	border-radius: 100px 100px 100px 100px;
+	list-style: none;
+  padding: 10px 15px;
+  margin: 5px 250px 0px 50px;
+}
 
 

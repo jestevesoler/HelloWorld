@@ -7,8 +7,8 @@ function retornarPersonas()
 
     /* loop through array */
     $.each(data, function(index, d){
-      html.push("<li> <b> Nombre : </b> ", d.Nombre, "<b> F.Nac : </b>" ,
-                d.FNac , " <b> F.Def : </b> " , d.FDec ,"</li>");
+      html.push("<li id=\"persona\"> <b> Nombre : </b> ", d.Nombre, "<p><b> F.Nac : </b>" ,
+                d.FNac , " <b> F.Def : </b> " , d.FDec ,"</p></li>");
     });
 
 
