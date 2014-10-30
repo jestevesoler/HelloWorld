@@ -1,4 +1,6 @@
 <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+<link rel="stylesheet" type="text/css" href="http://www.jointjs.com/downloads/joint.css"></link>
+<script type="text/javascript" src="http://www.jointjs.com/downloads/joint.js" ></script>
 
 <!-- CSS -->
 <link rel="stylesheet" href="styles.css">
@@ -9,6 +11,12 @@
 $(document).ready(function (){
   $("#btn382").click(function(){
     retornarPersonas();
+  });
+  $("#btn383").click(function(){
+    retornarArbol();
+  });
+  $("#btn384").click(function(){
+    retornarArbol2();
   });
 });
 </script>
@@ -24,9 +32,9 @@ $(document).ready(function (){
 	<nav id="navigation">
 		<ul>
 			<li><a id="btn382">Familia</a></li>
-			<li><a id="btn383">Nuevo</a></li>
-			<li><a href="#">Arbol</a></li>
-			<li><a href="#">Fotos</a></li>
+			<li><a>Nuevo</a></li>
+			<li><a id="btn383">Arbol</a></li>
+			<li><a id="btn384">Fotos</a></li>
 			<li><a href="#">Buscar</a></li>
 			<li><a href="/HelloWorld/Personas.json" target="_blank">Archivo</a></li>
 		</ul>
@@ -38,6 +46,7 @@ $(document).ready(function (){
   <div id="example-section38">
 
     <div id="div381"></div>
+    <div id="myholder"> </div>
 
   </div>
 </body>

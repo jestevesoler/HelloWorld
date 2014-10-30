@@ -108,4 +108,19 @@ ul {
   margin: 5px 250px 0px 50px;
 }
 
+#myholder {
+  border-style: solid;
+	border-width: 1px;
+	border-color: #BABABA #BABABA #BABABA #BABABA;
+	box-shadow: 0 1px rgba(255,255,255,1) inset;
+	border-radius: 100px 100px 100px 100px;
+
+}
+
+rect {
+  fill: #2C3E50;
+  stroke:black;
+}
+
+
 

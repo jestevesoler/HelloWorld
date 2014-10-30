@@ -18,3 +18,67 @@ function retornarPersonas()
     alert("error occurred!");
     });
 }
+
+function retornarArbol()
+{
+    var graph = new joint.dia.Graph;
+    /*Fondo para graficos*/
+    var paper = new joint.dia.Paper({
+        el: $('#myholder'),
+        width: 600,
+        height: 200,
+        model: graph
+    });
+
+    $.ajaxSetup({ cache: false });
+    $.getJSON("/HelloWorld/Personas.json", function(data){
+      $.each(data, function(index, d){
+
+    }).error(function(jqXHR, textStatus, errorThrown){ /* assign handler */
+      /* alert(jqXHR.responseText) */
+      alert("error occurred!");
+    });
+
+
+}
+
+function nuevaCaja(nombre) {
+
+  var rect = new joint.shapes.basic.Rect({
+    position: { x: 100, y: 30 },
+    size: { width: 100, height: 30 },
+    attrs: { rect: { fill: 'red' }, text: { text: 'nombre', fill: 'white' } }
+  });
+
+  return rect;
+}
+
+function retornarArbol2()
+{
+    var graph = new joint.dia.Graph;
+    /*Fondo para graficos*/
+    var paper = new joint.dia.Paper({
+        el: $('#myholder'),
+        width: 600,
+        height: 200,
+        model: graph
+    });
+    /*Una caja*/
+    var rect = new joint.shapes.basic.Rect({
+        position: { x: 100, y: 30 },
+        size: { width: 100, height: 30 },
+        attrs: { rect: { fill: 'red' }, text: { text: 'Prueba', fill: 'white' } }
+    });
+    /*otra caja*/
+    var rect2 = rect.clone();
+    rect2.translate(300);
+
+    /*Linea de union*/
+    var link = new joint.dia.Link({
+        source: { id: rect.id },
+        target: { id: rect2.id }
+    });
+
+    graph.addCells([rect, rect2, link]);
+}
+
