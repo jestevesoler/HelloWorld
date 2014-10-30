@@ -13,13 +13,13 @@
 		{"id":9, "Nombre":"Borja Esteve Molner","F.Nac.":4/12/1998, "F.Dec":null},
 		{"id":10, "Nombre":"Mar Esteve Molner","F.Nac.":19/11/2005, "F.Dec":null},
 		{"id":11, "Nombre":"Brigida Blasco Blasco","F.Nac.":1911, "F.Dec":14/08/1997},
-		{"id":12, "Nombre":"Vicente Soler","F.Nac.":1905, "F.Dec":14/08/1963},
+		{"id":12, "Nombre":"Vicente Soler Olmos","F.Nac.":1905, "F.Dec":14/08/1963},
 		{"id":13, "Nombre":"Concepcion Olmos Igual","F.Nac.":1909, "F.Dec":20/04/2002},
 		{"id":14, "Nombre":"Jose Esteve Angel","F.Nac.":1908, "F.Dec":13/11/1976},
 		{"id":15, "Nombre":"Amparo Molner Herraez","F.Nac.":1966, "F.Dec":null},
 		{"id":16, "Nombre":"Jose Esteve Blat","F.Nac.":"desc", "F.Dec":"desc"},
 		{"id":17, "Nombre":"Francisca Angel Martinez","F.Nac.":"desc", "F.Dec":"desc"},
-		{"id":18, "Nombre":"Francisco Olmos Taberner","F.Nac.":"desc", "F.Dec":11/06/1955},	SEGUNDA ENSANCHE 0196 4	
+		{"id":18, "Nombre":"Francisco Olmos Taberner","F.Nac.":"desc", "F.Dec":11/06/1955},	SEGUNDA ENSANCHE 0196 4
 		{"id":19, "Nombre":"Encarnacion Igual Miralles","F.Nac.":"desc", "F.Dec":03/07/1936} SEGUNDA ENSANCHE 0196 4
 
    	]
@@ -36,10 +36,10 @@
 {"Relacion":
 	[
 		{"P1":4, "P2":1, "TR":1, "Inicio":null "Fin":null},
-		{"P1":4, "P2":2, "TR":1, "Inicio":null "Fin":null},		
+		{"P1":4, "P2":2, "TR":1, "Inicio":null "Fin":null},
 		{"P1":4, "P2":3, "TR":1, "Inicio":null "Fin":null},
 		{"P1":5, "P2":1, "TR":1, "Inicio":null "Fin":null},
-		{"P1":5, "P2":2, "TR":1, "Inicio":null "Fin":null},		
+		{"P1":5, "P2":2, "TR":1, "Inicio":null "Fin":null},
 		{"P1":5, "P2":3, "TR":1, "Inicio":null "Fin":null},
 		{"P1":4, "P2":5, "TR":2, "Inicio":1965 "Fin":null},
 		{"P1":1, "P2":6, "TR":2, "Inicio":2010 "Fin":null},

@@ -43,12 +43,12 @@ function retornarArbol()
     });
 }
 
-function nuevaCaja(nombre) {
+function nuevaCaja(nombre, fnac, fdec) {
 
   var rect = new joint.shapes.basic.Rect({
     position: { x: 100, y: 30 },
-    size: { width: 100, height: 30 },
-    attrs: { rect: { fill: 'red' }, text: { text: nombre, fill: 'white' } }
+    size: { width: 150, height: 60 },
+    attrs: { rect: { fill: 'red' }, text: { text: nombre.replace(/\s/g,"\n"), fill: 'white' } }
   });
 
   return rect;
