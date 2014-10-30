@@ -32,14 +32,15 @@ function retornarArbol()
 
     $.ajaxSetup({ cache: false });
     $.getJSON("/HelloWorld/Personas.json", function(data){
-      $.each(data, function(index, d){
+
+       $.each(data, function(index, d){
+          graph.addCells([nuevaCaja(d.Nombre)]);
+        });
 
     }).error(function(jqXHR, textStatus, errorThrown){ /* assign handler */
-      /* alert(jqXHR.responseText) */
+    /* alert(jqXHR.responseText) */
       alert("error occurred!");
     });
-
-
 }
 
 function nuevaCaja(nombre) {
@@ -47,7 +48,7 @@ function nuevaCaja(nombre) {
   var rect = new joint.shapes.basic.Rect({
     position: { x: 100, y: 30 },
     size: { width: 100, height: 30 },
-    attrs: { rect: { fill: 'red' }, text: { text: 'nombre', fill: 'white' } }
+    attrs: { rect: { fill: 'red' }, text: { text: nombre, fill: 'white' } }
   });
 
   return rect;
