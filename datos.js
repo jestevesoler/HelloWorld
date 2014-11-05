@@ -63,8 +63,13 @@
 		{"P1":16, "P2":17, "TR":2, "Inicio":null "Fin":null},
 		{"P1":18, "P2":13, "TR":1, "Inicio":null "Fin":null},
 		{"P1":19, "P2":13, "TR":1, "Inicio":null "Fin":null},
-		{"P1":18, "P2":19, "TR":2, "Inicio":null "Fin":null}
-
+		{"P1":18, "P2":19, "TR":2, "Inicio":null "Fin":null},
+		{"P1":20, "P2":11, "TR":1, "Inicio":null "Fin":null},
+		{"P1":21, "P2":11, "TR":1, "Inicio":null "Fin":null},
+		{"P1":20, "P2":21, "TR":2, "Inicio":null "Fin":null},
+    {"P1":22, "P2":12, "TR":1, "Inicio":null "Fin":null},
+		{"P1":23, "P2":12, "TR":1, "Inicio":null "Fin":null},
+		{"P1":22, "P2":23, "TR":2, "Inicio":null "Fin":null}
 	]
 }
 ]}

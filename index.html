@@ -7,19 +7,7 @@
 
 <!-- Javascript -->
 <script type="text/javascript" src="/HelloWorld/main.js"></script>
-<script type="text/javascript">
-$(document).ready(function (){
-  $("#btn382").click(function(){
-    retornarPersonas();
-  });
-  $("#btn383").click(function(){
-    retornarArbol();
-  });
-  $("#btn384").click(function(){
-    retornarArbol2();
-  });
-});
-</script>
+
 
 <!-- HTML -->
 <meta charset="utf-8">
@@ -32,10 +20,10 @@ $(document).ready(function (){
 	<nav id="navigation">
 		<ul>
 			<li><a id="btn382">Familia</a></li>
-			<li><a>Nuevo</a></li>
+			<li><a id="btn386">Nuevo</a></li>
 			<li><a id="btn383">Arbol</a></li>
 			<li><a id="btn384">Fotos</a></li>
-			<li><a href="#">Buscar</a></li>
+			<li><a id="btn385">Buscar</a></li>
 			<li><a href="/HelloWorld/Personas.json" target="_blank">Archivo</a></li>
 		</ul>
 	</nav>
@@ -44,7 +32,11 @@ $(document).ready(function (){
 </div>
   <a name="#ajax-getjson-example"></a>
   <div id="example-section38">
-
+    <div id="div380">
+      <form id="fbuscar">
+        <input id="edbuscar">Buscar
+      </form>
+    </div>
     <div id="div381"></div>
     <div id="myholder"> </div>
 

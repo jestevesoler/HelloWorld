@@ -106,6 +106,7 @@ ul {
 	list-style: none;
   padding: 10px 15px;
   margin: 5px 250px 0px 50px;
+  text-transform: uppercase;
 }
 
 #myholder {
