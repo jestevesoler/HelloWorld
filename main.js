@@ -1,4 +1,3 @@
-
 $(document).ready(function (){
   $("#btn382").click(function(){
     retornarPersonas();
@@ -73,7 +72,7 @@ function retornarArbol()
 function nuevaCaja(nombre, apellidos, i) {
 
   var rect = new joint.shapes.basic.Rect({
-    position: { x: 100+(i*100), y: 30 },
+    position: { x: 50+((i%4)*160), y: 30 + (Math.trunc(i/4)*65) },
     size: { width: 150, height: 60 },
     attrs: { rect: { fill: 'red' }, text: { text: nombre + "\n" +apellidos, fill: 'white' } }
   });
