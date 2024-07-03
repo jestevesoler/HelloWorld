@@ -1,0 +1,736 @@
+procedure TFGeneradorInformes.btCerrarClick(Sender: TObject);
+var
+  v_idx: TBookmark;
+  v_fichero : string;
+  v_host, v_user, v_pwd : string;
+  v_ruta, v_rutabase, v_doc_id, v_ext : string;
+  v_ok, v_seleccion, v_envio_ok : boolean;
+  v_nofirm : string;
+  v_nombreFich :string;
+  v_tit : string;
+  v_tipo_doc :integer;
+  v_tipo_envio, v_ctas_correo, v_id_blob, v_tipo_informe : string; //tipos de informe que hay que enviar por correo
+  v_plsql_correo : string;
+  v_nom_fich, v_provi, v_provi_sig, v_infok :string;
+  v_atrANPROC, v_atrNMPROC, v_areaGD_Proc, v_tipo_cons, v_atrNIF: string;
+  v_pwdpdf, v_mail_origen, v_ape_pac, v_asunto, v_mens_envio : string;
+  v_url: String;
+  HttpCode: Integer;
+  v_envio_sigilum: Boolean;
+  // v_usu_sigilum : String; >> (-) vgarcia - 28/09/2022. Se quita restricción de médicos Sigilum, P.O de IHG
+  v_log_tiempos: String;
+
+  v_FirmaDigital : Boolean;
+begin
+   v_FirmaDigital := False;
+  // LOBO - 05/03/2024
+  if not EsUsuarioCreadorInforme then
+    exit;
+
+  TRY
+    TRY
+      v_log_tiempos := ' Cod. Inf.: ' + T_INF_INFORME.FieldByName('INF_TIN_ID').AsString + ' - ' + DateTimeToStr(now) + chr(13);
+
+      // vgarcia. Si se hacen pruebas (trazas) con id=38 (Valencia Solicitud Autorización Pruebas e Intevenciones Quirúrgicas), quitar el 38 de 'in [38,67,115,116]'
+      if g_proceso_cerrado and (T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger in [38,67,115,116]) then
+      begin
+        messagedlg('No se puede solicitar art82 en un proceso cerrado. ', mtwarning, [mbOk], 0);
+        exit;
+      end;
+
+      with TOraQuery.create(self) do
+      try
+        Session := Q_INF_INFORME.Session;
+
+      //JME 17/09/14 Si el tipo de informe está en CLI_PARAMETRO INF_NO_FIRMAR_365
+      //             no permitir firmarlo si el proceso tiene mas de 365 días de baja
+
+        sql.text := 'SELECT c.cpa_valor ' +
+                    '  FROM muvale.cli_parametro c  ' +
+                    ' WHERE c.cpa_codigo = ''INF_NO_FIRMAR_365'' ';
+        open;
+        v_nofirm := fields[0].AsString;
+
+        close;
+        sql.Text := 'SELECT p.* ' +
+                    '  FROM muvale.proceso p ' +
+                    ' WHERE  ' + T_INF_INFORME.FieldByName('INF_TIN_ID').asstring + ' IN ' + v_nofirm +
+                    '   AND p.anproces = ' + inttostr(g_anproces) +
+                    '   AND p.nmproces = ' + inttostr(g_nmproces) +
+                    '   AND DECODE(P.CONSIN,1,DECODE(SE_ACEPTA,''S'', ' +
+                    '       MUVALE.Cmn_Pck_Utiles.num_dias_baja(P.ANPROCES,P.NMPROCES,1),NULL),NULL) > 365 ';
+        open;
+
+        if not isempty then
+        begin
+          messagedlg('El proceso tiene más de 365 días de baja, no puede hacerse una propuesta de alta.'+chr(13)+chr(13)+'Si tiene dudas contacte con su Director Médico de Zona', mtWarning, [mbYes], 0);
+          exit;
+        end;
+        close;
+
+        //No se permite que se firme el informe si es de PA covid com. valeciana (120)
+        //o Andalucía y no tiene un DX de covid
+        if ((T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger = 120) OR (T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger = 123)) then
+        begin
+          sql.Text := 'SELECT muvale.pkg_covid19.PROCESO_COVID19(' + inttostr(g_anproces) +', ' + inttostr(g_nmproces) + ') ' +
+                      ' FROM dual ';
+          open;
+
+          if (not isempty) and ( fields[0].AsInteger = 0) then
+          begin
+            messagedlg('El proceso No tiene un diagnóstico Covid19.', mtWarning, [mbYes], 0);
+            exit;
+          end;
+          close;
+        end;
+
+        //IHG Si el informe es de tipo Comunicación PDX y tto CValenciana y no tiene un documento
+        // del tipo Informe Consentimiento de pruebas y/o tratamiento en ITCC
+        // No se permite firmar el documento para que no se envíe automáticamente a Inspección Médica
+        if (T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger in [38,67,115,116]) then
+        begin
+          v_log_tiempos := v_log_tiempos + ' 0 - ' + DateTimeToStr(now) + chr(13);
+
+          sql.Text := 'SELECT atr_id from comun.doc_atributo ' +
+                          ' WHERE upper(atr_correspondencia_tabla) = ''MUVALE.PROCESO'' ' +
+                          '   AND upper(atr_correspondencia_campo) = ''ANPROCES'' ';
+          open;
+          v_atrANPROC := fields[0].AsString;
+          close;
+
+          sql.Text := 'SELECT atr_id from comun.doc_atributo ' +
+                      ' WHERE upper(atr_correspondencia_tabla) = ''MUVALE.PROCESO'' ' +
+                      '   AND upper(atr_correspondencia_campo) = ''NMPROCES'' ';
+          open;
+          v_atrNMPROC := fields[0].AsString;
+          close;
+
+          sql.Text := 'SELECT CPA_VALOR from MUVALE.CLI_PARAMETRO WHERE CPA_CODIGO = ''DOC_AREA_PROCESO'' ';
+          open;
+          v_areaGD_Proc := fields[0].asstring;
+          close;
+
+          //ihg - tipo de documento para los informes de tipo consentimiento paciente
+          sql.Text := 'select ti.tin_tip_id from muvale.inf_tipo_informe ti where ti.tin_id = 3';
+          open;
+          v_tipo_cons := fields[0].asstring;
+          close;
+
+          sql.Text := 'SELECT atr_id from comun.doc_atributo ' +
+                      ' WHERE upper(atr_correspondencia_tabla) = ''MUVALE.DATPER'' ' +
+                      '   AND upper(atr_correspondencia_campo) = ''NIF'' ';
+          open;
+          v_atrNIF := fields[0].asstring;
+          close;
+
+          v_log_tiempos := v_log_tiempos + ' 1 - ' + DateTimeToStr(now) + chr(13);
+
+  {        sql.Text := ' SELECT d.doc_id, d.doc_nombre, td.tip_nombre, d.doc_fecha_crea, ' +
+                      '       d.doc_tipo_doc, d.doc_ruta_final, d.doc_nombre_fisico ' +
+                      '     FROM comun.doc_documento d, ' +
+                      '          comun.doc_atributo_documento ad, ' +
+                      '          comun.doc_atributo_documento ad2, ' +
+                      '          comun.doc_tipo_documento td ' +
+                      '    WHERE d.doc_id = ad.dat_doc_id ' +
+                      '      AND d.doc_estado <> ''X'' ' +
+                      '      AND ad.dat_atr_id =  ' + v_atrANPROC +
+                      '      AND ad.dat_valor  =  ' + inttostr(g_anproces) +
+                      '      AND d.doc_id = ad2.dat_doc_id ' +
+                      '      AND ad2.dat_atr_id =  ' + v_atrNMPROC +
+                      '      AND ad2.dat_valor  =  ' + inttostr(g_nmproces) +
+                      '      AND (d.doc_are_id = ' + v_areaGD_Proc + ') ' +
+                      '      AND d.doc_tip_id = td.tip_id ' +
+                      '      and td.tip_id = ' + v_tipo_cons;
+      //                '      and td.tip_id = 20 'PRUEBAS DESA;
+  }       //IHG - 05102022 - prueba tiempos query GD
+
+          sql.Text := ' SELECT d.doc_id, d.doc_nombre, td.tip_nombre, d.doc_fecha_crea, ' +
+                      '       d.doc_tipo_doc, d.doc_ruta_final, d.doc_nombre_fisico ' +
+                      '     FROM comun.doc_documento d, ' +
+                      '          comun.doc_tipo_documento td ' +
+                      '    WHERE d.doc_id in (select distinct ad.dat_doc_id ' +
+                      '                       from   comun.doc_atributo_documento ad, ' +
+                      '                              comun.doc_atributo_documento ad2, ' +
+                      '                              comun.doc_atributo_documento ad3 ' +
+                      '                       where  ad.dat_doc_id = ad2.dat_doc_id ' +
+                      '                       and    ad.dat_doc_id = ad3.dat_doc_id ' +
+                      '                       and    ad.dat_atr_id =  ' + v_atrANPROC +
+                      '                       and    ad.dat_valor  =  ' + inttostr(g_anproces) +
+                      '                       AND    ad2.dat_atr_id = ' + v_atrNMPROC +
+                      '                       AND    ad2.dat_valor  = ' + inttostr(g_nmproces) +
+                      '                       and    ad3.dat_atr_id = ' + v_atrNIF +
+                      '                       and    ad3.dat_valor  =  ''' + g_NIF  + ''')' +
+                      '      AND d.doc_are_id = ' + v_areaGD_Proc +
+                      '      AND d.doc_estado <> ''X'' ' +
+                      '      AND d.doc_tip_id = td.tip_id ' +
+                      '      and td.tip_id = ' + v_tipo_cons;
+      //                '      and td.tip_id = 20 '{PRUEBAS DESA};
+      //  showmessage(sql.Text);
+          open;
+          v_log_tiempos := v_log_tiempos + ' 2 - ' + DateTimeToStr(now) + chr(13);
+    //      if isempty and (T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger in [38,67]) then
+
+    //PLO: 12/09/2019 Nuevo Articulo 82-> 115, 116
+          if isempty then
+          begin
+              messagedlg('Es necesario que exista el consentimiento del paciente para el art.82 en el gestor documental para poder firmar este documento.', mtWarning, [mbOK], 0);
+              exit;
+          end;
+        end;
+
+      finally
+        free;
+      end;
+
+      if messagedlg('Se va a firmar el informe y a enviar a GD, una vez firmado ya no se podrá modificar'+chr(13)+'(si se podrá clonar)' + chr(13) + chr(13) +
+                    '¿Desea firmar el informe? ' , mtConfirmation, [mbYes, mbNo], 0) = mrYes then
+      begin
+
+      v_log_tiempos := v_log_tiempos + ' 3 - ' + DateTimeToStr(now) + chr(13);
+
+         // Se inserta en GD
+         with TOraQuery.create(self) do
+          try
+
+             session := T_INF_INFORME.Session;
+
+             sql.Text :=  ' SELECT ti.tin_tip_id, ' +
+                          '        replace((substr(tin_nombre, 0, instr(tin_nombre, ''.'')-1)||inf_anproces||inf_nmproces||to_char(inf_fecha,''ddmmyyhh24miss'')), ''/'', ''''), ' +
+                          '        substr(tin_nombre, instr(tin_nombre, ''.'')+1), ' +
+                          '        substr(ti.tin_observacion, 0, 99) ' +
+                          '   FROM muvale.v_inf_informe i, muvale.inf_tipo_informe ti ' +
+                          '  WHERE i.inf_anproces = ' + Q_INF_INFORME.fieldbyname('inf_anproces').asstring +
+                          '    AND i.inf_nmproces = ' + Q_INF_INFORME.fieldbyname('inf_nmproces').asstring +
+                          '    AND i.inf_fecha    = TO_DATE('''+ Q_INF_INFORME.fieldbyname('INF_FECHA').AsString + ''', ''dd/mm/rrrr HH24:MI:SS'') ' +
+                          '    AND ti.tin_id      = i.inf_tin_id ';
+             open;
+
+             v_nombreFich := Fields[1].asstring;
+             v_tipo_doc := fields[0].asinteger;
+             v_ext := fields[2].asstring;
+             v_tit :=   fields[3].asstring;
+          finally
+            free;
+          end;
+
+         v_log_tiempos := v_log_tiempos + ' 4 - ' + DateTimeToStr(now) + chr(13);
+
+         //Se inserta el nuevo archivo en la estructura de GD
+         InsertaGD(v_ruta, v_rutabase, v_doc_id, v_ext, v_nombreFich, v_tit, g_area, v_tipo_doc);
+
+         v_log_tiempos := v_log_tiempos + ' 5 - ' + DateTimeToStr(now) + chr(13);
+
+         T_INF_INFORME.Edit;
+
+         crearFichero(v_fichero, v_doc_id);
+
+         // >> INI (-)vgarcia. 28/06/2024. MCLI-298. Generador Informes. Corrección al adjuntar documento firmado: no encuentra el archivo. Se desactiva llamada a PlasmaFirmaDigital(..)
+           // INI>> (+)  [PLO: 07/06/2024].[MCLI-281:Firma en digital en Generador de Informes]
+           // (-)vgarcia:  PlasmaFirmaDigital(v_fichero, v_doc_id, TRUE);
+           // FIN<< (+)  [PLO: 07/06/2024].[MCLI-281:Firma en digital en Generador de Informes]
+         // << FIN (-)vgarcia. 28/06/2024. MCLI-298. Generador Informes. Corrección al adjuntar documento firmado: no encuentra el archivo. Se desactiva llamada a PlasmaFirmaDigital(..)
+
+
+         v_log_tiempos := v_log_tiempos + ' 6 - ' + DateTimeToStr(now) + chr(13);
+
+         //Se convierte a PDF antes del envio y se deja en la ruta del TS
+         with TFrmGestPdfGI.Create(self) do
+         try
+            caption := 'Gestión Documental';
+            Show;
+            convertir(Directorio('USERPROFILE')+'\MiSpooler\',ansireplacestr((Q_INF_INFORME.fieldbyname('tin_nombre').asstring), '.doc', ''));
+         finally
+           free;
+         end;
+
+         v_fichero := ansireplacestr(v_fichero, '.doc', '.pdf');
+
+         // JME 15/09/14 si el documento es una Propuesta de Alta CV (20) se permite
+         // al usuario seleccionar los documentos adjuntos antes de crear el documento
+         // para firmarlo y subirlo a GD.
+
+         { // >> INI (-) vgarcia - 28/09/2022. Se quita restricción de médicos Sigilum, P.O de IHG; cualquiera que firme informe de PA andalucía, lo envía
+         //IHG 03/04/2019 - Añado propuestas de alta Andalucía SIGILUM.
+         v_usu_sigilum := '';
+         v_envio_sigilum := false;
+         with TOraQuery.create(self) do
+         try
+            session := Q_TIPO_INFORMES.Session;
+            sql.Text := ' select c.cpa_valor ' +
+                        ' from   muvale.cli_parametro c ' +
+                        ' where  c.cpa_codigo = ''SIG_ENVIO''';
+            open;
+            IF not IsEmpty then
+              v_usu_sigilum := fields[0].AsString;
+
+         finally
+            free;
+         end;
+
+         //Compruebo si se envía a SIGILUM o no
+         with TOraQuery.create(self) do
+         try
+            session := Q_TIPO_INFORMES.Session;
+            sql.Text := ' select 1 ' +
+                        ' from   muvale.usuarios u ' +
+                        ' where  upper(u.login) = upper(user) ' +
+                        ' and    u.nusuario in (' + v_usu_sigilum + ')';
+            open;
+            v_envio_sigilum := (NOT IsEmpty);
+
+         finally
+            free;
+         end;
+         // <<  FIN (-) vgarcia - 28/09/2022. Se quita restricción de médicos Sigilum, P.O. de IHG; cualquiera que firme informe de PA andalucía, lo envía  }
+
+         v_envio_sigilum := true; // (+) vgarcia - 28/09/2022. Asignación forzada. Se quita restricción de médicos Sigilum, P.O. de IHG
+
+         v_log_tiempos := v_log_tiempos + ' 7 - ' + DateTimeToStr(now) + chr(13);
+
+         //Comprobamos que la provincia del paciente es de Andalucía
+         with TOraQuery.create(self) do
+         try
+          session := Q_TIPO_INFORMES.Session;
+          sql.Text := ' select d.provi ' +
+                      ' from   muvale.datper d, ' +
+                      '        muvale.proceso p, ' +
+                      '        muvale.provi pr ' +
+                      ' where  p.nif = d.nif ' +
+                      ' and    p.anproces = ' + inttostr(g_anproces) +
+                      ' and    p.nmproces = ' + inttostr(g_nmproces) +
+                      ' and    d.provi = pr.provi ' +
+                      ' and    ccaa = 1';
+          open;
+          v_envio_sigilum := ((v_envio_sigilum) and(NOT IsEmpty));
+
+         finally
+           free;
+         end;
+
+
+         // >> INI (+) vgarcia. 26*06/2023. Si PA Andalucía, comprobar que el código CIE es un código de enfermedad válido para Sigilum
+         if ((T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger in [41,123]) AND (v_envio_sigilum)) then
+         begin
+           with TOraQuery.create(self) do
+           begin
+             try
+               Session := Q_TIPO_INFORMES.Session;
+               SQL.Text :=
+                    'SELECT dx.dx_enf_id, e.enf_id ' + #13#10 +
+                    'FROM   muvale.dx_diagnostico dx, ' + #13#10 +
+                    '       muvale.dx_enfermedad e ' + #13#10 +
+                    'WHERE  dx.dx_anproces = ' + inttostr(g_anproces) + #13#10 +
+                    'AND    dx.dx_nmproces = ' + inttostr(g_nmproces) + #13#10 +
+                    'AND    dx.dx_enf_id   = e.enf_id (+)' + #13#10 +
+                    'AND    e.enf_cod_id (+) = 11 ' + #13#10 +
+                    'AND    dx.dx_tip_id in (1,3) ' + #13#10 +
+                    'AND NOT EXISTS (SELECT 1 ' + #13#10 +
+                    '                FROM   muvale.dx_diagnostico dx2 ' + #13#10 +
+                    '                WHERE  dx2.dx_anproces = dx.dx_anproces ' + #13#10 +
+                    '                AND    dx2.dx_nmproces = dx.dx_nmproces ' + #13#10 +
+                    '                AND    dx2.dx_tip_id in (1,3) ' + #13#10 +
+                    '                AND    ((dx2.dx_f_dx > dx.dx_f_dx) OR ' + #13#10 +
+                    '                        (dx2.dx_f_dx = dx.dx_f_dx AND dx2.dx_enf_cod_id > dx.dx_enf_cod_id) OR ' + #13#10 +
+                    '                        (dx2.dx_f_dx = dx.dx_f_dx AND dx2.dx_enf_cod_id = dx.dx_enf_cod_id AND dx2.dx_orden > dx.dx_orden) ' + #13#10 +
+                    '                        ) ' + #13#10 +
+                    '                )';
+               Open;
+               if IsEmpty or FieldByName('enf_id').IsNull then
+               begin
+                 MessageDlg(
+                   Format('El último Diagnóstico %s NO ES VÁLIDO  para el envío a SIGILUM. Por favor, introduzca un nuevo Diagnóstico. La propuesta no se va a enviar.',
+                                          [FieldByName('dx_enf_id').AsString]), mtWarning, [mbOK], 0);
+                 Exit;
+               end;
+             finally
+               Free;
+             end;
+           end;
+         end;
+         // << FIN (+) vgarcia. 26*06/2023. Si PA Andalucía, comprobar que el código CIE es un código de enfermedad válido para Sigilum
+
+
+
+         {CASOS ESPECIALES:
+          20	20SolProAltCVV2.doc	Solicitud Propuesta de alta C. Valenciana y Murcia
+          38	Plantilla38.doc	    Valencia Solicitud Autorización Pruebas e Intevenciones Quirúrgicas
+          41	Plantilla41.doc	    Solicitud de Propuesta de Alta Andalucia
+          67	Plantilla67.doc	    Alicante Solicitud de Autorización de Pruebas e Intervenciones Quirúrgicas
+          115	Plantilla115.doc	  CValenciana. Art. 82. Autorización Tratamientos Terapéuticos y Rehabilitadores.
+          116	Plantilla116.doc	  CValenciana. Art. 82. Autorización Pruebas Diagnósticas.
+          120	Plantilla120.doc	  Solicitud PA COVID19 C. Valenciana y Murcia
+          123	Plantilla123.doc	  Propuesta Alta Casos confirmados COVID asintomático      }
+
+         v_log_tiempos := v_log_tiempos + ' 8 - ' + DateTimeToStr(now) + chr(13);
+
+         if (T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger in [20,120,38,67,115,116]) OR
+            ((T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger in [41,123]) AND (v_envio_sigilum))then
+            seleccionaDocAdjuntoPA(v_seleccion ,v_fichero, v_doc_id);
+  //showmessage('selección: ' + vartostr(v_seleccion));
+         if ( (v_seleccion = false) and
+              ((T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger = 38) or
+               (T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger = 67) or
+               (T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger = 115) or
+               (T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger = 116) or
+               ((T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger in [41,123]) and (v_envio_sigilum))
+              )
+            ) then
+         begin
+           //showmessage('prueba salir');
+           Ejecuta_Codigo('DELETE ' +
+                          '  FROM comun.doc_atributo_documento da ' +
+                          ' WHERE da.dat_doc_id = ' + v_doc_id);
+           Ejecuta_Codigo('DELETE ' +
+                          '  FROM comun.doc_documento da ' +
+                          ' WHERE da.doc_id = ' + v_doc_id);
+           Exit;
+         end;
+
+         v_log_tiempos := v_log_tiempos + ' 9 - ' + DateTimeToStr(now) + chr(13);
+  //showmessage('Exit1');
+  //Exit;
+  //showmessage('Exit2');
+         //*******************************************************************
+          //        FIRMA DEL DOCUMENTO
+          //*******************************************************************
+          // Version Prueba permite seleccion del certificado para firmar,
+          // quitar TFPruebaFirma version final.
+          //-------------------------------------------------------------------
+
+          //showmessage('CAMBIAR AREA EN PRO');
+
+         v_ok := FirmaDocumento(v_fichero, v_doc_id);
+         v_envio_ok := v_ok;
+         //pruebas envio mail ->///////////////////////*************************************************************************************///////////////////////*************************************************************************************
+  //**********************QUITAR!!!
+  //v_envio_ok := true;
+  ///////////////////////*************************************************************************************///////////////////////*************************************************************************************
+  //showmessage('tipo informe: ' + T_INF_INFORME.FieldByName('INF_TIN_ID').AsString);
+
+         v_log_tiempos := v_log_tiempos + ' 10 - ' + DateTimeToStr(now) + chr(13);
+
+         if T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger IN [115, 116] then
+            v_mens_envio := 'EL INFORME NO SE ENVIARÁ  A LA INSPECCIÓN CORRESPONDIENTE. ' + chr(13) + chr(13)
+         else
+         if T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger in [38,67] then
+            v_mens_envio := 'EL INFORME NO SE ENVIARÁ AUTOMÁTICAMENTE POR MAIL A LA INSPECCIÓN CORRESPONDIENTE. ' + chr(13) + chr(13)
+         else if ((T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger = 41) OR
+                  (T_INF_INFORME.FieldByName('INF_TIN_ID').AsInteger = 123)
+                  )then
+            v_mens_envio := 'LA PROPUESTA DE ALTA NO SE ENVIARÁ A LA JUNTA DE ANDALUCÍA.' + chr(13) + chr(13)
+         else
+            v_mens_envio := '';
+         if not v_ok then
+         begin
+            if messagedlg('Se ha producido un error y NO HA SIDO POSIBLE FIRMAR el informe.' + chr(13) + chr(13) +
+                    v_mens_envio  +
+                    '¿Quiere subirlo a Gestión Documental SIN FIRMAR?',mtWarning, [mbNo, mbOk], 0) = mrOk then
+            BEGIN
+              v_ok := true;
+
+              //ihg 19/09/2017 - Log error en firma SÍ se sube al gestor doc.
+              {Ejecuta_Codigo('INSERT INTO MUVALE.CURAR_LOG (log_id, log_app, log_anproces, log_nmproces, log_msg) ' +
+                     ' VALUES (seq_curar_log.nextval, ''ENVIO_ART82'', ' + inttostr(g_anproces) + ', ' +
+                     inttostr(g_nmproces) + ',''Error al firmar el informe INF_TIN_ID: ' + T_INF_INFORME.FieldByName('INF_TIN_ID').AsString + ', SÍ se sube al G. documental'')');}
+            END
+            else
+            begin
+
+              Ejecuta_Codigo('DELETE ' +
+                             '  FROM prestaciones.intai_codigo_pa ' +
+                             ' WHERE CPA_DOC_ID = ' + v_doc_id);
+
+              Ejecuta_Codigo('DELETE ' +
+                             '  FROM prestaciones.intai_documento_adjunto ' +
+                             ' WHERE adj_doc_id = ' + v_doc_id);
+
+              ejecuta_codigo('DELETE ' +
+                             '  FROM prestaciones.intai_documento_adjunto ' +
+                             ' WHERE adj_doc_id_adj = ' + v_doc_id);
+
+              Ejecuta_Codigo('DELETE ' +
+                             '  FROM comun.doc_atributo_documento da ' +
+                             ' WHERE da.dat_doc_id = ' + v_doc_id);
+
+              ejecuta_codigo('DELETE ' +
+                             '  FROM comun.doc_documento da ' +
+                             ' WHERE da.doc_id = ' + v_doc_id);
+
+              v_ok := false;
+
+              //ihg 19/09/2017 - Log error en firma no se sube al gestor doc.
+              {Ejecuta_Codigo('INSERT INTO MUVALE.CURAR_LOG (log_id, log_app, log_anproces, log_nmproces, log_msg) ' +
+                     ' VALUES (seq_curar_log.nextval, ''ENVIO_ART82'', ' + inttostr(g_anproces) + ', ' +
+                     inttostr(g_nmproces) + ',''Error al firmar el informe INF_TIN_ID: ' + T_INF_INFORME.FieldByName('INF_TIN_ID').AsString + ', NO se sube al G. documental'')');}
+            end;
+
+         end;
+
+         v_log_tiempos := v_log_tiempos + ' 11 - ' + DateTimeToStr(now) + chr(13);
+
+         if v_ok then
+         begin
+
+           SubirGD(v_fichero, v_rutabase, v_ruta, v_doc_id);
+
+           // >> INI (-)vgarcia. 28/06/2024. MCLI-298. Generador Informes. Corrección al adjuntar documento firmado: no encuentra el archivo. Se desactiva llamada a PlasmaFirmaDigital(..)
+           // (-)vgarcia: PlasmaFirmaDigital(v_fichero, v_doc_id, FALSE);  //[PLO: 07/06/2024].[MCLI-281:Firma en digital en Generador de Informes]
+           // << FIN (-)vgarcia. 28/06/2024. MCLI-298. Generador Informes. Corrección al adjuntar documento firmado: no encuentra el archivo. Se desactiva llamada a PlasmaFirmaDigital(..)
+
+           v_tipo_informe := T_INF_INFORME.FieldByName('INF_TIN_ID').AsString;
+
+           T_INF_INFORME.Post;
+
+
+           //PLO 18/09/2019 Nuevo Articulo 82-> 115, 116
+           if  ((v_tipo_informe = '115') or (v_tipo_informe = '116')) then
+           begin
+              InsertarIntai2(2, v_doc_id, g_anproces, g_nmproces, v_tipo_informe);
+           end;
+
+           v_log_tiempos := v_log_tiempos + ' 12 - ' + DateTimeToStr(now) + chr(13);
+
+           //IHG 03/04/2019
+           if ((v_envio_ok) and ((v_tipo_informe = '41') OR (v_tipo_informe = '123')) and (v_envio_sigilum)) then
+           begin
+
+             //Se obtiene la URL para no enviar si no estamos en PRODUCCIÓN
+             with TOraQuery.create(self) do
+             try
+                session := Q_TIPO_INFORMES.Session;
+                sql.Text := ' select g.param_value ' +
+                            ' from   gnomo.gn_param g ' +
+                            ' where  g.param_id = ''sigilum.url.envio''';
+                open;
+
+                IF not IsEmpty then
+                  v_url := fields[0].AsString;
+
+             finally
+                free;
+             end;
+
+             v_url := v_url + '?anproces=' + inttostr(g_anproces) +
+                      '&nmproces=' + inttostr(g_nmproces) +'&docId=' + v_doc_id;
+             //v_url := 'https://sigilumpruebas.umivale.es/sigilum/publico/ws/enviopropuestaaltas?anproces=2019&nmproces=46622&docId=1110025';
+        //showmessage(v_url);
+             if not enviaSigilumPA(v_url) then
+               messagedlg('Ha ocurrido un error en el envío de la Propuesta.', mtWarning, [mbOk], 0)
+             else
+               messagedlg('Esta solicitud se ha enviado automáticamente a Inspección, no es necesario que la remita.', mtInformation, [mbOk], 0);
+           end;
+
+           v_log_tiempos := v_log_tiempos + ' 13 - ' + DateTimeToStr(now) + chr(13);
+
+
+
+           RealizarAccionesSiEsInformeSGAM(v_doc_id); // (+) vgarcia - 26/09/2022 . SGAM  (se ha mantenido tipo string, que es como está declarada la vble local)
+
+
+           //IHG PLR - AÑADIMOS ENVIO DE INFORME POR CORREO
+           //Comprobar si hay que enviar el informe por correo
+           with TOraQuery.create(self) do  //INF_ENVIO_CORREO
+           try
+           session := Q_TIPO_INFORMES.Session;
+           sql.Text := 'select cpa_valor from muvale.cli_parametro where cpa_codigo = ''INF_ENVIO_CORREO''';
+           open;
+
+           if ((not IsEmpty) AND (v_envio_ok)) then //si no hay informes configurados para entrar por correo no entra
+                                                    //IHG - 19/09/2017 SI HA FALLADO LA FIRMA NO ENTRA
+           begin
+
+            //ihg 19/09/2017 - Log error en firma no se sube al gestor doc.
+            { Ejecuta_Codigo('INSERT INTO MUVALE.CURAR_LOG (log_id, log_app, log_anproces, log_nmproces, log_msg) ' +
+                    ' VALUES (seq_curar_log.nextval, ''ENVIO_ART82'', ' + inttostr(g_anproces) + ', ' +
+                    inttostr(g_nmproces) + ',''Se va a enviar MAIL 1 INF_TIN_ID: ' + T_INF_INFORME.FieldByName('INF_TIN_ID').AsString + ''')');}
+
+
+             v_tipo_envio := fields[0].AsString;
+
+             //inicializo a 0 v_infok
+             v_infok := '0';
+             with TOraQuery.create(self) do  //INF_ENVIO_CORREO
+             try
+             session := Q_TIPO_INFORMES.Session;
+             sql.Text := 'select 1 from dual where ' + trim(v_tipo_informe) + ' in (' + v_tipo_envio + ')' ;
+             open;
+             if not IsEmpty then
+               v_infok := fields[0].AsString;
+    //showmessage('sql:' + sql.text + ';;; v_infok= ' + v_infok);
+             finally
+               free;
+             end;
+
+             //obtenemos la provincia del paciente y el nombre del fichero con su dni y numero de la tarj. sanitaria
+             with TOraQuery.create(self) do
+             try
+              session := Q_TIPO_INFORMES.Session;
+              sql.Text := ' select REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(upper(TRIM(D.AP1PER)) || decode(d.provi,3,'' '',''_'') || upper(TRIM(D.AP2PER)),''Á'',''A''),''É'',''E''),''Í'',''I''),''Ó'',''O''),''Ú'',''U''),''¿'',''-'') ' +
+                          ' ||decode(d.provi,3,''-UMI-''||c.alias1||''-''||TO_CHAR(SYSDATE,''YYYY_MM_DD''),''_UMIVALE_'' || TO_CHAR(SYSDATE,''YYYY-MM-DD'')) ' +
+                          '    ,d.provi, ' +
+                          ' REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(upper(TRIM(D.AP1PER)) || decode(d.provi,3,'' '',''_'') || upper(TRIM(D.AP2PER)),''Á'',''A''),''É'',''E''),''Í'',''I''),''Ó'',''O''),''Ú'',''U''),''¿'',''-'') as ape_pac' +
+                          ' from   muvale.datper d, ' +
+                          '        muvale.proceso p, ' +
+                          '        muvale.centro c ' +
+                          ' where  p.nif = d.nif ' +
+                          ' and    p.centro_asis = c.centro(+) ' +
+                          ' and    p.anproces = ' + inttostr(g_anproces) +
+                          ' and    p.nmproces = ' + inttostr(g_nmproces);
+              open;
+              v_nom_fich := fields[0].AsString;
+              v_provi    := fields[1].AsString;
+              v_ape_pac   := fields[2].AsString;
+    //showmessage(sql.Text);
+             finally
+               free;
+             end;
+
+             //Si hay que enviar el informe (miramos tipo informe y provincia del paciente)
+             if (v_infok = '1') and (((v_provi = '46') and (v_tipo_informe = '38')) or
+                                     ((v_provi = '3')  and (v_tipo_informe = '67'))
+                                    ) then
+             begin
+              //ihg 19/09/2017 - Log error en firma
+               {Ejecuta_Codigo('INSERT INTO MUVALE.CURAR_LOG (log_id, log_app, log_anproces, log_nmproces, log_msg) ' +
+                      ' VALUES (seq_curar_log.nextval, ''ENVIO_ART82'', ' + inttostr(g_anproces) + ', ' +
+                      inttostr(g_nmproces) + ',''Se va a enviar MAIL 2, VALIDACIONES V_INFOK Y PROVI. INF_TIN_ID: ' + T_INF_INFORME.FieldByName('INF_TIN_ID').AsString + ''')');}
+
+               with TOraQuery.create(self) do
+               try
+               session := Q_TIPO_INFORMES.Session;
+               sql.Text := 'select cpa_valor from muvale.cli_parametro where cpa_codigo = ';
+               if v_provi = '46' then
+               begin
+                 sql.Text := sql.Text + '''INF_CUENTAS_CORREO_VLC''';
+                 v_pwdpdf := 'umivale16';
+                 v_mail_origen := 'articulo82vlc@umivale.es';
+                 v_asunto := '';
+               end
+               else if v_provi = '3' then
+               begin
+                 sql.Text := sql.Text + '''INF_CUENTAS_CORREO_ALC''';
+                 v_pwdpdf := 'LDTeeGn26';
+                 v_mail_origen := 'articulo82alc@umivale.es';
+                 v_asunto := '_' + v_ape_pac;
+               end;
+               open;
+               //obtenemos las cuentas de correo de los destinatarios
+               v_ctas_correo := fields[0].AsString;
+      //showmessage(v_ctas_correo);
+               finally
+                 free;
+               end;
+
+               v_log_tiempos := v_log_tiempos + ' 14 - ' + DateTimeToStr(now) + chr(13);
+
+               //Insertamos el informe en un blob para enviarlo adjunto por correo
+               with TOraQuery.create(self) do
+               try
+                session := Q_TIPO_INFORMES.Session;
+                sql.Text := 'select max(pla_id)+10 from muvale.cli_plantilla_blob';
+                open;
+                v_id_blob := fields[0].AsString;
+      //showmessage(v_id_blob);
+               finally
+                 free;
+               end;
+
+      //Añadimos contraseña al fichero pdf
+               EncriptarDocumento(v_fichero,v_pwdpdf);
+
+               T_PLANTILLA_BLOB.Open;
+               T_PLANTILLA_BLOB.Insert;
+               TBlobField(T_PLANTILLA_BLOB.FieldByName('PLA_BLOB')).LoadFromFile(v_fichero);
+               T_PLANTILLA_BLOB.FieldByName('pla_id').AsInteger := strtoint(v_id_blob);
+               T_PLANTILLA_BLOB.FieldByName('PLA_DESC').AsString := 'INFORME TEMPORAL PARA ENVIO POR CORREO';
+               T_PLANTILLA_BLOB.Post;
+
+          // ENVIAMOS EMAIL
+
+      //    v_ctas_correo   =  v_email
+          //BLOQUE ANONIMO A INSERTAR
+
+
+               v_plsql_correo := 'declare ' + #13 +
+                        '  v_email    VARCHAR2(400); '  + #13 +
+                        '  mail_conn  UTL_SMTP.CONNECTION; ' + #13 +
+                        '  l_blob     BLOB; ' + #13 +
+                        '  begin ' + #13 +
+                        '        v_email := ''' + v_ctas_correo + '''; ' +#13 +
+                        '        DBMS_LOB.CREATETEMPORARY(l_blob, FALSE); ' + #13 +
+                        '        SELECT pla_blob ' + #13 +
+                        '        INTO l_blob ' + #13 +
+                        '        FROM muvale.cli_plantilla_blob b ' + #13 +
+                        '        WHERE b.pla_id = ' + v_id_blob + '; ' +  #13 +
+                        '        mail_conn :=  comun.pck_envio_mail_gva.Begin_Mail(' +'''' + v_mail_origen + '''' + ', ' + #13 +
+                        '        v_email, ' + #13 +
+                        '        ''Umivale' + v_asunto + ''', ' + #13 +
+                        '        comun.pck_envio_mail_gva.MULTIPART_MIME_TYPE); ' + #13 +
+                        '        comun.pck_envio_mail_gva.Attach_Base64(mail_conn, l_blob, ' + ''''+ 'application/pdf ' + '''' + ' , TRUE, ''' +v_nom_fich + '.pdf'+'''' + '); ' + #13 +
+                        '        comun.pck_envio_mail_gva.End_Mail(mail_conn); ' + #13 +
+                        '        end;';
+
+                //Showmessage(v_plsql_correo);
+                //Showmessage(ansireplacestr(v_plsql_correo,'''','#'));
+                {Ejecuta_Codigo('INSERT INTO MUVALE.CURAR_LOG (log_id, log_app, log_anproces, log_nmproces, log_msg) ' +
+                               ' VALUES (seq_curar_log.nextval, ''ENVIO_ART82'', ' + inttostr(g_anproces) + ', ' +
+                               inttostr(g_nmproces) + ',''' + ansireplacestr(v_plsql_correo,'''','#') + ''')');}
+
+                Ejecuta_Codigo(v_plsql_correo); // vgarcia. Si se hacen pruebas (trazas), comentar esta línea para que no envíe el mail.
+
+                v_log_tiempos := v_log_tiempos + ' 15 - ' + DateTimeToStr(now) + chr(13);
+
+
+                //BORRAR REGISTRO DE LA TABLA (BLOB)
+                Ejecuta_Codigo('DELETE ' +
+                               '  FROM muvale.cli_plantilla_blob ' +
+                               ' WHERE PLA_ID = ' + v_id_blob);
+
+                messagedlg('Esta solicitud se ha enviado automáticamente a Inspección, no es necesario que la remita.', mtWarning, [mbOk], 0);
+
+             ///
+             end; //end del if AnsiPos(trim(v_tipo_informe),trim(v_tipo_envio)) <> 0 then
+
+           end; // FIN si no hay informes configurados para entrar por correo no entra
+           finally //INF_ENVIO_CORREO
+             free;
+           end;
+
+
+
+
+           deletefile(v_fichero);
+
+           SituarEnDocumento();
+           // AGH 16/10/2018 se comenta a petición de Dirección médica
+           //recibiPA(T_INF_INFORME.FieldByName('INF_TIN_ID').asstring);
+
+           messagedlg('El informe ha sido cerrado y enviado a Gestión Documental.', mtInformation, [mbOk], 0);
+
+
+
+           ControlRestricciones(ctvInformes);
+         end;
+         //*******************************************************************
+
+      end;
+      //Registro tiempos por problemas en Art. 82
+
+
+    except
+      on e:exception do
+      begin
+        MessageDlg('Error al cerrar el informe.' + chr(13) + e.Message, mtwarning, [mbok],0);
+        Ejecuta_Codigo('INSERT INTO MUVALE.CURAR_LOG (log_id, log_bpl, log_form, log_anproces, log_nmproces, log_msg, log_info) ' +
+                       ' VALUES (seq_curar_log.nextval, ''bplCLI_0.bpl'', ''UGeneradorInformes'',' + inttostr(g_anproces) + ', ' +
+                       inttostr(g_nmproces) + ',''' + v_log_tiempos + ''',''' + T_INF_INFORME.FieldByName('INF_TIN_ID').AsString + ''')');
+      end;
+    end;
+  finally
+
+
+    Ejecuta_Codigo('INSERT INTO MUVALE.CURAR_LOG (log_id, log_bpl, log_form, log_anproces, log_nmproces, log_msg, log_info) ' +
+                   ' VALUES (seq_curar_log.nextval, ''bplCLI_0.bpl'', ''UGeneradorInformes'',' + inttostr(g_anproces) + ', ' +
+                   inttostr(g_nmproces) + ',''' + v_log_tiempos + ''',''' + T_INF_INFORME.FieldByName('INF_TIN_ID').AsString + ''')');
+  end;
+end;
